@@ -55,17 +55,26 @@ class Goodie_Collections {
 	 */
 	public function init() {
 		add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
+		add_action( 'plugins_loaded', array( $this, 'bootstrap_plugin' ), 20 );
 		add_action( 'admin_notices', array( $this, 'maybe_show_woocommerce_notice' ) );
+	}
+
+	/**
+	 * Bootstrap plugin services after plugins are loaded.
+	 *
+	 * @return void
+	 */
+	public function bootstrap_plugin() {
+		$this->post_types = new Goodie_Collections_Post_Types();
+		$this->post_types->init();
 
 		if ( ! $this->is_woocommerce_active() ) {
 			return;
 		}
 
-		$this->post_types     = new Goodie_Collections_Post_Types();
 		$this->frontend_form  = new Goodie_Collections_Frontend_Form();
 		$this->cart_functions = new Goodie_Collections_Cart_Functions();
 
-		$this->post_types->init();
 		$this->frontend_form->init();
 		$this->cart_functions->init();
 
