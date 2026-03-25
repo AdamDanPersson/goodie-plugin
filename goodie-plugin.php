@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+define( 'GOODIE_PLUGIN_VERSION', '1.0.1' );
 define( 'GOODIE_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 define( 'GOODIE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -57,6 +58,7 @@ class Goodie_Collections {
 		add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
 		add_action( 'plugins_loaded', array( $this, 'bootstrap_plugin' ), 20 );
 		add_action( 'admin_notices', array( $this, 'maybe_show_woocommerce_notice' ) );
+		add_action( 'init', array( $this, 'maybe_flush_rewrite_rules' ), 99 );
 	}
 
 	/**
@@ -67,6 +69,11 @@ class Goodie_Collections {
 	public function bootstrap_plugin() {
 		$this->post_types = new Goodie_Collections_Post_Types();
 		$this->post_types->init();
+
+		if ( GOODIE_PLUGIN_VERSION !== get_option( 'goodie_collections_version' ) ) {
+			update_option( 'goodie_collections_version', GOODIE_PLUGIN_VERSION );
+			update_option( 'goodie_collections_flush_rewrite', 1 );
+		}
 
 		if ( ! $this->is_woocommerce_active() ) {
 			return;
@@ -213,9 +220,38 @@ class Goodie_Collections {
 	public static function activate() {
 		include_once ABSPATH . 'wp-admin/includes/plugin.php';
 
+		$post_types = new Goodie_Collections_Post_Types();
+		$post_types->register_post_type();
+		$post_types->register_taxonomy();
+		flush_rewrite_rules();
+		update_option( 'goodie_collections_version', GOODIE_PLUGIN_VERSION );
+
 		if ( ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
 			update_option( 'goodie_collections_missing_woocommerce', 1 );
 		}
+	}
+
+	/**
+	 * Flush rewrite rules once after activation or version updates.
+	 *
+	 * @return void
+	 */
+	public function maybe_flush_rewrite_rules() {
+		if ( ! get_option( 'goodie_collections_flush_rewrite' ) ) {
+			return;
+		}
+
+		flush_rewrite_rules( false );
+		delete_option( 'goodie_collections_flush_rewrite' );
+	}
+
+	/**
+	 * Deactivation callback.
+	 *
+	 * @return void
+	 */
+	public static function deactivate() {
+		flush_rewrite_rules();
 	}
 }
 
@@ -280,3 +316,4 @@ $goodie_collections = new Goodie_Collections();
 $goodie_collections->init();
 
 register_activation_hook( __FILE__, array( 'Goodie_Collections', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'Goodie_Collections', 'deactivate' ) );
