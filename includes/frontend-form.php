@@ -31,7 +31,28 @@ class Goodie_Collections_Frontend_Form {
 	 */
 	public function render_form_shortcode() {
 		if ( ! is_user_logged_in() ) {
-			return '<p class="goodie-message">' . esc_html__( 'Please log in to create a candy collection.', 'goodie-collections' ) . '</p>';
+			$current_url   = get_permalink();
+			$login_url     = wp_login_url( $current_url );
+			$register_url  = wp_registration_url();
+			$register_link = '';
+
+			if ( ! empty( $register_url ) && get_option( 'users_can_register' ) ) {
+				$register_link = ' <a href="' . esc_url( $register_url ) . '">' . esc_html__( 'Create an account', 'goodie-collections' ) . '</a>';
+			}
+
+			return '<div class="goodie-notice goodie-notice--error"><p>' . sprintf(
+				/* translators: 1: login URL, 2: optional registration link. */
+				wp_kses(
+					__( 'Please <a href="%1$s">log in</a> to create a candy collection.%2$s', 'goodie-collections' ),
+					array(
+						'a' => array(
+							'href' => array(),
+						),
+					)
+				),
+				esc_url( $login_url ),
+				$register_link
+			) . '</p></div>';
 		}
 
 		$terms    = get_terms(

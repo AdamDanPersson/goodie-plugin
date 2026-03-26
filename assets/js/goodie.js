@@ -19,7 +19,9 @@
 		window.dataLayer.push({
 			event: window.goodieCollections.eventName || 'goodie_collection_created',
 			collectionId: window.goodieCollections.collectionId || 0,
-			collectionName: window.goodieCollections.collectionName || ''
+			collectionName: window.goodieCollections.collectionName || '',
+			productCount: window.goodieCollections.productCount || 0,
+			categories: window.goodieCollections.categories || []
 		});
 	}
 

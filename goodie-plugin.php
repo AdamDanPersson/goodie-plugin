@@ -3,7 +3,7 @@
  * Plugin Name: Goodie Collections
  * Plugin URI:  https://goodie.local
  * Description: Frontend candy collection builder for WooCommerce.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Goodie
  * Text Domain: goodie-collections
  * Domain Path: /languages
@@ -59,6 +59,7 @@ class Goodie_Collections {
 		add_action( 'plugins_loaded', array( $this, 'bootstrap_plugin' ), 20 );
 		add_action( 'admin_notices', array( $this, 'maybe_show_woocommerce_notice' ) );
 		add_action( 'init', array( $this, 'maybe_flush_rewrite_rules' ), 99 );
+		add_action( 'admin_init', array( $this, 'register_gtm_setting' ) );
 	}
 
 	/**
@@ -117,8 +118,19 @@ class Goodie_Collections {
 	 */
 	public function enqueue_assets() {
 		global $post;
+		$collection_categories = array();
+		$collection_id         = is_singular( 'goodie_collection' ) ? get_the_ID() : 0;
+		$product_count         = $collection_id ? count( goodie_collections_get_product_ids( $collection_id ) ) : 0;
 
-		$should_enqueue = is_post_type_archive( 'goodie_collection' ) || is_singular( 'goodie_collection' );
+		if ( $collection_id ) {
+			$terms = get_the_terms( $collection_id, 'goodie_category' );
+
+			if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+				$collection_categories = wp_list_pluck( $terms, 'name' );
+			}
+		}
+
+		$should_enqueue = is_post_type_archive( 'goodie_collection' ) || is_singular( 'goodie_collection' ) || is_page_template( 'page-template-goodie-collection-form.php' );
 
 		if ( $post instanceof WP_Post ) {
 			$should_enqueue = $should_enqueue || has_shortcode( $post->post_content, 'goodie_collection_form' );
@@ -134,7 +146,7 @@ class Goodie_Collections {
 			'goodie-collections',
 			GOODIE_PLUGIN_URL . 'assets/js/goodie.js',
 			array(),
-			'1.0.0',
+			GOODIE_PLUGIN_VERSION,
 			true
 		);
 
@@ -143,8 +155,10 @@ class Goodie_Collections {
 			'goodieCollections',
 			array(
 				'collectionCreated' => isset( $_GET['goodie_collection_created'] ) ? 1 : 0,
-				'collectionId'      => is_singular( 'goodie_collection' ) ? get_the_ID() : 0,
-				'collectionName'    => is_singular( 'goodie_collection' ) ? html_entity_decode( wp_strip_all_tags( get_the_title() ), ENT_QUOTES, 'UTF-8' ) : '',
+				'collectionId'      => $collection_id,
+				'collectionName'    => $collection_id ? html_entity_decode( wp_strip_all_tags( get_the_title( $collection_id ) ), ENT_QUOTES, 'UTF-8' ) : '',
+				'productCount'      => $product_count,
+				'categories'        => array_values( $collection_categories ),
 				'eventName'         => apply_filters( 'goodie_collections_gtm_event_name', 'goodie_collection_created' ),
 				'minProducts'       => goodie_collections_get_minimum_products(),
 				'i18n'              => array(
@@ -152,6 +166,54 @@ class Goodie_Collections {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Register the GTM container ID setting.
+	 *
+	 * @return void
+	 */
+	public function register_gtm_setting() {
+		register_setting(
+			'general',
+			'goodie_collections_gtm_container_id',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => array( $this, 'sanitize_gtm_container_id' ),
+				'default'           => '',
+			)
+		);
+
+		add_settings_field(
+			'goodie_collections_gtm_container_id',
+			__( 'Goodie GTM container ID', 'goodie-collections' ),
+			array( $this, 'render_gtm_setting_field' ),
+			'general'
+		);
+	}
+
+	/**
+	 * Sanitize a GTM container ID.
+	 *
+	 * @param string $value Raw option value.
+	 *
+	 * @return string
+	 */
+	public function sanitize_gtm_container_id( $value ) {
+		return preg_replace( '/[^A-Z0-9\-]/', '', strtoupper( (string) $value ) );
+	}
+
+	/**
+	 * Render the GTM settings field.
+	 *
+	 * @return void
+	 */
+	public function render_gtm_setting_field() {
+		$value = (string) get_option( 'goodie_collections_gtm_container_id', '' );
+		?>
+		<input type="text" name="goodie_collections_gtm_container_id" id="goodie_collections_gtm_container_id" value="<?php echo esc_attr( $value ); ?>" class="regular-text" placeholder="GTM-XXXXXXX" />
+		<p class="description"><?php echo esc_html__( 'Enter the Google Tag Manager container ID used for Goodie collection tracking.', 'goodie-collections' ); ?></p>
+		<?php
 	}
 
 	/**
@@ -261,7 +323,8 @@ class Goodie_Collections {
  * @return string
  */
 function goodie_collections_get_gtm_container_id() {
-	$container_id = (string) apply_filters( 'goodie_collections_gtm_container_id', '' );
+	$container_id = (string) get_option( 'goodie_collections_gtm_container_id', '' );
+	$container_id = (string) apply_filters( 'goodie_collections_gtm_container_id', $container_id );
 
 	return preg_replace( '/[^A-Z0-9\-]/', '', $container_id );
 }

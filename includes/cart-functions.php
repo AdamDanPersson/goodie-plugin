@@ -21,6 +21,8 @@ class Goodie_Collections_Cart_Functions {
 	 */
 	public function init() {
 		add_action( 'wp_loaded', array( $this, 'handle_add_collection_to_cart' ) );
+		add_filter( 'woocommerce_get_item_data', array( $this, 'add_collection_item_data' ), 10, 2 );
+		add_filter( 'woocommerce_cart_item_name', array( $this, 'append_collection_cart_label' ), 10, 3 );
 	}
 
 	/**
@@ -52,6 +54,8 @@ class Goodie_Collections_Cart_Functions {
 		}
 
 		$added_products = 0;
+		$collection_name = get_the_title( $collection_id );
+		$group_key       = wp_generate_uuid4();
 
 		foreach ( $product_ids as $product_id ) {
 			$product = wc_get_product( $product_id );
@@ -61,8 +65,13 @@ class Goodie_Collections_Cart_Functions {
 			}
 
 			$quantity = (int) apply_filters( 'goodie_collections_cart_quantity', 1, $product_id, $collection_id );
+			$cart_item_data = array(
+				'goodie_collection_id'        => $collection_id,
+				'goodie_collection_name'      => $collection_name,
+				'goodie_collection_group_key' => $group_key,
+			);
 
-			if ( WC()->cart->add_to_cart( $product_id, max( 1, $quantity ) ) ) {
+			if ( WC()->cart->add_to_cart( $product_id, max( 1, $quantity ), 0, array(), $cart_item_data ) ) {
 				++$added_products;
 			}
 		}
@@ -77,5 +86,64 @@ class Goodie_Collections_Cart_Functions {
 
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * Add collection details to cart item meta.
+	 *
+	 * @param array $item_data Existing displayed item data.
+	 * @param array $cart_item Cart item array.
+	 *
+	 * @return array
+	 */
+	public function add_collection_item_data( $item_data, $cart_item ) {
+		if ( empty( $cart_item['goodie_collection_name'] ) ) {
+			return $item_data;
+		}
+
+		$item_data[] = array(
+			'key'   => __( 'Collection', 'goodie-collections' ),
+			'value' => wc_clean( $cart_item['goodie_collection_name'] ),
+		);
+
+		return $item_data;
+	}
+
+	/**
+	 * Append a visible collection label below cart item names.
+	 *
+	 * @param string $product_name Product name HTML.
+	 * @param array  $cart_item    Cart item array.
+	 * @param string $cart_item_key Cart item key.
+	 *
+	 * @return string
+	 */
+	public function append_collection_cart_label( $product_name, $cart_item, $cart_item_key ) {
+		unset( $cart_item_key );
+		static $rendered_groups = array();
+
+		if ( empty( $cart_item['goodie_collection_name'] ) || ( ! is_cart() && ! is_checkout() ) ) {
+			return $product_name;
+		}
+
+		$group_key = isset( $cart_item['goodie_collection_group_key'] ) ? (string) $cart_item['goodie_collection_group_key'] : '';
+		$heading   = '';
+
+		if ( $group_key && ! isset( $rendered_groups[ $group_key ] ) ) {
+			$rendered_groups[ $group_key ] = true;
+			$heading = sprintf(
+				'<div class="goodie-cart-collection-heading">%s <strong>%s</strong></div>',
+				esc_html__( 'Collection:', 'goodie-collections' ),
+				esc_html( $cart_item['goodie_collection_name'] )
+			);
+		}
+
+		$label = sprintf(
+			'<p class="goodie-cart-collection-meta">%s <strong>%s</strong></p>',
+			esc_html__( 'Part of collection:', 'goodie-collections' ),
+			esc_html( $cart_item['goodie_collection_name'] )
+		);
+
+		return $heading . $product_name . $label;
 	}
 }
